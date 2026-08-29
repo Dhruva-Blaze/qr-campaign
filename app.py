@@ -24,6 +24,7 @@ if not MONGO_URI or not ADMIN_PASSWORD or not JWT_SECRET:
 
 raw_origins = os.environ.get('FRONTEND_ORIGINS', '').strip()
 origins = [x.strip().rstrip('/') for x in raw_origins.split(',') if x.strip()]
+# Accept both www/non-www only when explicitly configured; exact origins remain recommended.
 if not origins:
     origins = ['http://localhost', 'http://127.0.0.1']
 
@@ -34,7 +35,7 @@ CORS(
     allow_headers=['Content-Type', 'Authorization']
 )
 
-client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=10000)
+client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=15000, connectTimeoutMS=15000)
 db = client[DB_NAME]
 inquiries = db.inquiries
 fs = GridFS(db)
