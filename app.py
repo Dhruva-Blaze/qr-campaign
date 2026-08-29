@@ -29,7 +29,7 @@ if not MONGO_URI or not ADMIN_PASSWORD or not JWT_SECRET:
 raw_origins = os.environ.get("FRONTEND_ORIGINS", "").strip()
 origins = [item.strip().rstrip("/") for item in raw_origins.split(",") if item.strip()]
 if not origins:
-    origins = ["http://localhost", "http://127.0.0.1"]
+    origins = ["https://gl.blazecorporation.in", "http://localhost", "http://127.0.0.1"]
 
 CORS(
     app,
@@ -46,30 +46,44 @@ _fs = None
 
 
 def get_mongo():
-    """Create MongoClient lazily, after Gunicorn workers start."""
+    """Create and verify MongoClient lazily inside the running worker."""
     global _client, _db, _inquiries, _fs
 
-    if _client is not None:
-        return _client, _db, _inquiries, _fs
-
     with _mongo_lock:
-        if _client is None:
-            options = {
-                "serverSelectionTimeoutMS": 30000,
-                "connectTimeoutMS": 30000,
-                "socketTimeoutMS": 30000,
-                "retryWrites": True,
-                "tls": True,
-                "tlsCAFile": certifi.where(),
-                "tlsDisableOCSPEndpointCheck": True,
-            }
+        if _client is not None:
+            try:
+                _client.admin.command("ping")
+                return _client, _db, _inquiries, _fs
+            except Exception:
+                try:
+                    _client.close()
+                except Exception:
+                    pass
+                _client = _db = _inquiries = _fs = None
 
-            _client = MongoClient(MONGO_URI, **options)
-            _db = _client[DB_NAME]
-            _inquiries = _db.inquiries
-            _fs = GridFS(_db)
+        options = {
+            "serverSelectionTimeoutMS": 30000,
+            "connectTimeoutMS": 30000,
+            "socketTimeoutMS": 30000,
+            "retryWrites": True,
+            "tls": True,
+            "tlsCAFile": certifi.where(),
+            "tlsDisableOCSPEndpointCheck": True,
+            "appname": "qr-campaign",
+        }
 
-    return _client, _db, _inquiries, _fs
+        client = MongoClient(MONGO_URI, **options)
+        try:
+            client.admin.command("ping")
+        except Exception:
+            client.close()
+            raise
+
+        _client = client
+        _db = client[DB_NAME]
+        _inquiries = _db.inquiries
+        _fs = GridFS(_db)
+        return _client, _db, _inquiries, _fs
 
 
 def verify_password(password):
