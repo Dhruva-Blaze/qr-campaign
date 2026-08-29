@@ -1,0 +1,6 @@
+Flask==3.0.3
+gunicorn==23.0.0
+flask-cors==4.0.1
+pymongo[srv]==4.8.0
+PyJWT==2.9.0
+Werkzeug==3.0.3
