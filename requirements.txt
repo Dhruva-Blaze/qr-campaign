@@ -5,3 +5,4 @@ pymongo[srv]>=4.13.0
 PyJWT>=2.10.0
 Werkzeug>=3.1.0
 certifi>=2025.1.31
+openpyxl>=3.1.5

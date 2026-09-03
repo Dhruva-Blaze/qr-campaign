@@ -6,6 +6,10 @@ from datetime import datetime, timezone, timedelta
 from functools import wraps
 from io import BytesIO
 
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+from openpyxl.utils import get_column_letter
+
 import certifi
 import jwt
 from bson import ObjectId
@@ -266,6 +270,71 @@ def list_inquiries():
     _, _, inquiries, _ = get_mongo()
     return jsonify(
         [serialize(item) for item in inquiries.find().sort("created_at", DESCENDING)]
+    )
+
+
+@app.get("/api/admin/export/leads.xlsx")
+@admin_required
+def export_leads_excel():
+    """Download all received inquiry leads as an Excel workbook."""
+    _, _, inquiries, _ = get_mongo()
+    records = list(inquiries.find().sort("created_at", DESCENDING))
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Leads"
+
+    headers = [
+        "Lead ID",
+        "Name",
+        "Mobile",
+        "City",
+        "Looking for Home Loan",
+        "Loan Purpose",
+        "Loan Amount",
+        "Occupation",
+        "Selected Frame",
+        "Received At",
+    ]
+    sheet.append(headers)
+
+    header_fill = PatternFill("solid", fgColor="0083CA")
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for doc in records:
+        sheet.append([
+            str(doc.get("_id", "")),
+            doc.get("name", ""),
+            doc.get("mobile", ""),
+            doc.get("city", ""),
+            doc.get("looking_for_home_loan", ""),
+            doc.get("loan_purpose", ""),
+            doc.get("loan_amount", ""),
+            doc.get("occupation", ""),
+            doc.get("selected_frame", ""),
+            doc.get("created_at", ""),
+        ])
+
+    sheet.freeze_panes = "A2"
+    for column_index, header in enumerate(headers, start=1):
+        max_length = len(header)
+        for row in sheet.iter_rows(min_row=2, min_col=column_index, max_col=column_index):
+            value = row[0].value
+            max_length = max(max_length, len(str(value or "")))
+        sheet.column_dimensions[get_column_letter(column_index)].width = min(max_length + 2, 32)
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+    filename = f"received-leads-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}.xlsx"
+    return send_file(
+        output,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,
+        download_name=filename,
     )
 
 
